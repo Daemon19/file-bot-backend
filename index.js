@@ -38,7 +38,11 @@ app.get('/files', async (req, res) => {
 });
 
 app.post('/files', upload.single('file'), async (req, res) => {
+  const metadata = {
+    name: req.file.originalname,
+  };
   const message = await channel.send({
+    content: JSON.stringify(metadata),
     files: [
       {
         attachment: req.file.path,
@@ -46,16 +50,23 @@ app.post('/files', upload.single('file'), async (req, res) => {
       },
     ],
   });
-  const data = {
-    id: message.id,
-    attributes: {
-      createdAt: message.createdAt,
-      name: req.file.originalname,
-      url: message.attachments.first().url,
-    },
-  };
+  const data = messageToReponseData(message);
   res.status(201).json({ data });
 });
+
+app.put(
+  '/files/:id',
+  param('id').notEmpty().custom(foundId),
+  body('name').notEmpty().isString(),
+  async (req, res) => {
+    const message = await channel.messages.fetch(req.params.id);
+    const metadata = JSON.parse(message.content)
+    metadata.name = req.body.name;
+    await message.edit(JSON.stringify(metadata));
+    const data = messageToReponseData(message);
+    res.send({ data });
+  }
+);
 
 app.delete(
   '/files/:id',
@@ -89,4 +100,17 @@ async function foundId(id) {
     throw new Error(error);
   }
   return true;
+}
+
+function messageToReponseData(message) {
+  const metadata = message.content;
+  const data = {
+    id: message.id,
+    attributes: {
+      createdAt: message.createdAt,
+      name: metadata.name,
+      url: message.attachments.first().url,
+    },
+  };
+  return data;
 }
